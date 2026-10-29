@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Memory Frame</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main>
+    <p class="badge">MEMORY FRAME · PROTOTYPE 1</p>
+    <h1>Every photo has a story.</h1>
+    <p>Write the memory behind your printed photograph.</p>
+
+    <label for="story">Your memory</label>
+    <textarea id="story" maxlength="3000"
+      placeholder="This photo was taken at Mum's birthday..."></textarea>
+
+    <button id="save">Save memory</button>
+
+    <div class="frame">
+      <p>🖼️</p>
+      <h2>One photo. Your story.</h2>
+      <p>This button represents the touch sensor on our future frame.</p>
+      <button id="play" disabled>Touch to hear</button>
+    </div>
+
+    <button id="stop" class="secondary">Stop speaking</button>
+    <p id="status" role="status" aria-live="polite">
+      Write your first memory above.
+    </p>
+    <small>
+      Text is saved in this browser. Clearing browser data removes it.
+      This first version uses your device's generated voice;
+      audio-file export comes later.
+    </small>
+  </main>
+</body>
+</html>
