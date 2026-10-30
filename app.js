@@ -318,3 +318,185 @@ fetch("/voices")
     voiceNote.textContent =
       error.message + " Default George is still available to try.";
   });
+
+
+
+// MEMORY FRAME MICROPHONE — Whisper recording
+const micButton = document.createElement("button");
+micButton.id = "mic-button";
+micButton.type = "button";
+micButton.textContent = "🎙 Record your memory";
+
+const micHelp = document.createElement("p");
+micHelp.id = "mic-help";
+micHelp.setAttribute("role", "status");
+micHelp.textContent =
+  "Record up to 2 minutes. Whisper transcribes after you stop.";
+
+const recordingPlayer = document.createElement("audio");
+recordingPlayer.controls = true;
+recordingPlayer.hidden = true;
+
+story.before(micButton, micHelp, recordingPlayer);
+
+let recorder = null;
+let recordingStream = null;
+let recordingTimer = null;
+let recordingUrl = null;
+let busyRecording = false;
+
+function releaseMicrophone() {
+  clearTimeout(recordingTimer);
+  recordingStream?.getTracks().forEach(track => track.stop());
+  recordingStream = null;
+}
+
+function lockControls(locked) {
+  story.disabled = locked;
+  save.disabled = locked;
+  play.disabled = locked || !audio;
+  preview.disabled = locked ||
+    !voiceChoices.find(v => v.id === voiceSelect.value)?.preview;
+}
+
+if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+  micButton.disabled = true;
+  micHelp.textContent =
+    "Recording is unavailable here. Open the app in Chrome over HTTPS.";
+}
+
+micButton.onclick = async () => {
+  if (recorder?.state === "recording") {
+    micButton.disabled = true;
+    recorder.stop();
+    return;
+  }
+  if (busyRecording) return;
+
+  busyRecording = true;
+  micButton.disabled = true;
+  lockControls(true);
+
+  if (audio) audio.pause();
+  sample.pause();
+  recordingPlayer.pause();
+
+  // Keep the existing story; append this recording only once.
+  const previousStory = story.value.trim();
+
+  try {
+    micHelp.textContent = "Allow microphone access to begin.";
+    recordingStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+    });
+
+    const mimeType = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+    ].find(type => MediaRecorder.isTypeSupported(type));
+
+    recorder = mimeType
+      ? new MediaRecorder(recordingStream, { mimeType })
+      : new MediaRecorder(recordingStream);
+
+    const chunks = [];
+    let recordingFailed = false;
+
+    recorder.ondataavailable = event => {
+      if (event.data.size) chunks.push(event.data);
+    };
+
+    recorder.onerror = () => {
+      recordingFailed = true;
+      releaseMicrophone();
+      busyRecording = false;
+      lockControls(false);
+      micButton.disabled = false;
+      micButton.classList.remove("listening");
+      micButton.textContent = "🎙 Record your memory";
+      micHelp.textContent = "Recording failed. Please try again.";
+    };
+
+    recorder.onstop = async () => {
+      releaseMicrophone();
+      if (recordingFailed) return;
+
+      micButton.disabled = true;
+      micButton.classList.remove("listening");
+      micButton.textContent = "Transcribing…";
+
+      try {
+        const blob = new Blob(chunks, {
+          type: recorder.mimeType || "audio/webm",
+        });
+
+        if (!blob.size) throw new Error("No audio was recorded.");
+        if (blob.size > 10 * 1024 * 1024) {
+          throw new Error("Recording is too large. Try a shorter one.");
+        }
+
+        if (recordingUrl) URL.revokeObjectURL(recordingUrl);
+        recordingUrl = URL.createObjectURL(blob);
+        recordingPlayer.src = recordingUrl;
+        recordingPlayer.hidden = false;
+
+        micHelp.textContent =
+          "Whisper is transcribing in your Codespace. Please wait…";
+
+        const response = await fetch("/transcribe", {
+          method: "POST",
+          headers: { "Content-Type": blob.type },
+          body: blob,
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(result.error || "Transcription failed.");
+        }
+
+        if (!result.text?.trim()) {
+          micHelp.textContent =
+            "No speech detected. Listen to your recording and try again.";
+          return;
+        }
+
+        story.value = [previousStory, result.text.trim()]
+          .filter(Boolean).join("\n\n");
+
+        story.dispatchEvent(new Event("input", { bubbles: true }));
+
+        micHelp.textContent = story.value.length > 3000
+          ? "Transcribed. Shorten the story to 3000 characters before generating."
+          : "Transcribed! Review the words, then choose your narration voice.";
+      } catch (error) {
+        micHelp.textContent = error.message;
+      } finally {
+        busyRecording = false;
+        lockControls(false);
+        micButton.disabled = false;
+        micButton.textContent = "🎙 Record more";
+      }
+    };
+
+    recorder.start();
+    micButton.disabled = false;
+    micButton.classList.add("listening");
+    micButton.textContent = "■ Stop & transcribe";
+    micHelp.textContent =
+      "Recording… Speak naturally. Tap Stop & transcribe when finished.";
+
+    recordingTimer = setTimeout(() => {
+      if (recorder.state === "recording") recorder.stop();
+    }, 120000);
+  } catch (error) {
+    releaseMicrophone();
+    busyRecording = false;
+    lockControls(false);
+    micButton.disabled = false;
+    micButton.textContent = "🎙 Record your memory";
+    micHelp.textContent = error.name === "NotAllowedError"
+      ? "Microphone access was denied. Allow it in Chrome's site settings."
+      : "Could not start recording. Check microphone access and try again.";
+  }
+};

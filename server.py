@@ -1,3 +1,4 @@
+from transcription import TranscriptionMixin
 import json
 import os
 import urllib.request
@@ -9,7 +10,7 @@ ROOT = Path(__file__).resolve().parent
 API_KEY = os.environ.get("ELEVENLABS_API_KEY", "")
 VOICE_ID = "JBFqnCBsd6RMkjVDRZzb"
 
-class Handler(BaseHTTPRequestHandler):
+class Handler(TranscriptionMixin, BaseHTTPRequestHandler):
     def send(self, status, data, content_type):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
@@ -67,6 +68,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send(200, (ROOT / name).read_bytes(), content_type)
 
     def do_POST(self):
+        if self.path == "/transcribe":
+            self.transcribe_recording()
+            return
         if self.path != "/generate":
             self.error(404, "Not found")
             return

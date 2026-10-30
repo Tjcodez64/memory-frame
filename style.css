@@ -1,73 +1,118 @@
 * { box-sizing: border-box; }
+
 body {
   margin: 0;
-  background: #f4f0e8;
-  color: #253d35;
+  background: #f3f5f8;
+  color: #23344b;
   font-family: system-ui, sans-serif;
 }
+
 main {
-  max-width: 620px;
+  max-width: 720px;
   margin: auto;
-  padding: 35px 22px;
+  padding: 40px 22px 65px;
 }
-.badge { font-size: 12px; letter-spacing: 2px; }
-h1 { font-size: 38px; }
-p, small { line-height: 1.6; }
-label { display: block; margin: 25px 0 10px; font-weight: bold; }
-textarea {
+
+.badge {
+  color: #6d819b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+}
+
+h1 {
+  margin: 16px 0;
+  font-size: clamp(34px, 7vw, 52px);
+  letter-spacing: -2px;
+  line-height: 1.1;
+}
+
+h2 { font-size: 22px; letter-spacing: -.5px; }
+p, small { line-height: 1.7; }
+main > p:not(.badge) { color: #63738a; }
+
+label {
+  display: block;
+  margin: 24px 0 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+textarea, select {
   width: 100%;
-  min-height: 160px;
-  padding: 15px;
-  border: 1px solid #a9b6aa;
-  border-radius: 12px;
+  padding: 17px;
+  border: 1px solid #d5dfea;
+  border-radius: 14px;
+  background: #fff;
+  color: #23344b;
   font: inherit;
-  resize: vertical;
 }
+
+textarea {
+  min-height: 170px;
+  resize: vertical;
+  line-height: 1.7;
+}
+
 button {
   width: 100%;
+  min-height: 52px;
   margin-top: 14px;
-  padding: 16px;
+  padding: 15px 20px;
   border: 0;
-  border-radius: 12px;
-  background: #285344;
+  border-radius: 14px;
+  background: #294d75;
   color: white;
   font: inherit;
-  font-weight: bold;
+  font-weight: 600;
   cursor: pointer;
 }
+
+button:hover { filter: brightness(1.06); }
 button:disabled { opacity: .45; cursor: default; }
-button:focus-visible, textarea:focus-visible {
-  outline: 3px solid #b47852;
-  outline-offset: 3px;
+
+button:focus-visible, textarea:focus-visible,
+select:focus-visible, a:focus-visible {
+  outline: 3px solid #709ccc;
+  outline-offset: 4px;
 }
-.frame {
-  margin-top: 30px;
-  padding: 25px;
-  border: 14px solid #bc8d63;
-  border-radius: 8px;
-  background: #fffdf7;
-  text-align: center;
-}
-.frame > p:first-child { font-size: 50px; margin: 0; }
-.secondary { background: #e1e5dc; color: #253d35; }
-small { display: block; color: #647268; }
+
+.secondary { background: #e4ebf3; color: #294d75; }
 
 .voice-panel {
-  margin-top: 24px;
-  padding: 20px;
-  background: #fffdf7;
-  border: 1px solid #d4dace;
-  border-radius: 14px;
-}
-.voice-panel h2 { margin-top: 0; font-size: 22px; }
-select {
-  width: 100%;
-  padding: 14px;
-  border: 1px solid #a9b6aa;
-  border-radius: 9px;
+  margin-top: 28px;
+  padding: 26px;
   background: white;
-  color: #253d35;
-  font: inherit;
+  border: 1px solid #dfe6ef;
+  border-radius: 22px;
 }
-.voice-panel p { font-size: 14px; }
+
+.voice-panel h2 { margin-top: 0; }
+.voice-panel p { font-size: 13px; color: #63738a; }
+
+.frame {
+  margin: 36px auto 20px;
+  padding: 24px;
+  border: 12px solid #b6cbe0;
+  border-radius: 16px;
+  background: #fff;
+  text-align: center;
+  box-shadow: 0 15px 40px #263f6012;
+}
+
+.frame > p:first-child { font-size: 44px; margin: 0; }
+.frame p { color: #63738a; font-size: 14px; }
+
+small { display: block; color: #6d7e94; font-size: 12px; }
 audio { width: 100%; margin-top: 15px; }
+audio[hidden] { display: none; }
+
+#mic-button { background: #ddeaf7; color: #294d75; }
+#mic-button.listening { background: #9e3c50; color: white; }
+#mic-help { font-size: 12px; color: #6d7e94; }
+#status { padding: 12px 0; font-weight: 500; }
+
+@media (max-width: 480px) {
+  main { padding: 26px 18px 45px; }
+  .voice-panel { padding: 20px; }
+}
