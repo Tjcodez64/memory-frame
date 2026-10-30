@@ -774,3 +774,204 @@ clearMemory.onclick = async () => {
     });
   };
 })();
+
+// MULTIPLE PHOTO MEMORIES
+(() => {
+  const gallery = document.createElement("section");
+  gallery.className = "voice-panel";
+  gallery.innerHTML = `
+    <h2>📸 My Photo Memories</h2>
+    <p>Save a photo, its story and its narration together.</p>
+    <input id="photo-title" placeholder="Memory title">
+    <input id="photo-file" type="file" accept="image/*">
+    <button id="save-photo-memory" type="button">
+      Save this memory
+    </button>
+    <p id="gallery-status" role="status"></p>
+    <div id="memory-gallery"></div>
+  `;
+  document.querySelector("#save").before(gallery);
+
+  const title = gallery.querySelector("#photo-title");
+  const file = gallery.querySelector("#photo-file");
+  const message = gallery.querySelector("#gallery-status");
+  const items = gallery.querySelector("#memory-gallery");
+
+  function database() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open("memory-frame-gallery", 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore("photos", { keyPath: "id" });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  async function operate(mode, action) {
+    const db = await database();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("photos", mode);
+      const store = tx.objectStore("photos");
+      const req = action(store);
+      tx.oncomplete = () => {
+        db.close();
+        resolve(req.result);
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(tx.error);
+      };
+      tx.onabort = () => {
+        db.close();
+        reject(tx.error);
+      };
+    });
+  }
+
+  async function refreshGallery() {
+    const memories = await operate(
+      "readonly", store => store.getAll()
+    );
+    items.replaceChildren();
+
+    if (!memories.length) {
+      items.textContent = "No photo memories saved yet.";
+      return;
+    }
+
+    for (const memory of memories.reverse()) {
+      const card = document.createElement("div");
+      card.style.cssText =
+        "border:1px solid #aaa;border-radius:12px;" +
+        "padding:12px;margin:12px 0";
+
+      const heading = document.createElement("h3");
+      heading.textContent = memory.title;
+      card.append(heading);
+
+      if (memory.photo) {
+        const img = document.createElement("img");
+        const url = URL.createObjectURL(memory.photo);
+        img.src = url;
+        img.alt = memory.title;
+        img.style.cssText =
+          "width:100%;max-height:220px;object-fit:contain";
+        img.onload = () => URL.revokeObjectURL(url);
+        card.append(img);
+      }
+
+      const open = document.createElement("button");
+      open.type = "button";
+      open.textContent = "Open memory";
+      open.onclick = async () => {
+        try {
+          story.value = memory.text;
+          story.dispatchEvent(new Event("input", {
+            bubbles: true
+          }));
+
+          if (audio) audio.pause();
+          if (audioUrl) URL.revokeObjectURL(audioUrl);
+          audio = null;
+          audioUrl = null;
+          play.disabled = true;
+          download.style.display = "none";
+          download.removeAttribute("href");
+
+          if (memory.narration) {
+            await storedAudio("readwrite", {
+              blob: memory.narration,
+              text: memory.text
+            });
+            audioUrl = URL.createObjectURL(memory.narration);
+            audio = new Audio(audioUrl);
+            play.disabled = false;
+            download.href = audioUrl;
+            download.download = memory.narration.type.includes("mpeg")
+              ? "memory.mp3" : "memory.webm";
+            download.style.display = "block";
+          } else {
+            await storedAudio("readwrite", null);
+          }
+
+          localStorage.setItem(
+            "memory-frame-story", memory.text
+          );
+          status.textContent = "Memory opened!";
+          message.textContent = "Opened: " + memory.title;
+        } catch (err) {
+          message.textContent = "Could not open memory.";
+        }
+      };
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "Delete";
+      remove.className = "secondary";
+      remove.onclick = async () => {
+        if (!confirm("Delete " + memory.title + "?")) return;
+        try {
+          await operate(
+            "readwrite",
+            store => store.delete(memory.id)
+          );
+          await refreshGallery();
+          message.textContent = "Memory deleted.";
+        } catch {
+          message.textContent = "Delete failed.";
+        }
+      };
+
+      card.append(open, remove);
+      items.append(card);
+    }
+  }
+
+  gallery.querySelector("#save-photo-memory").onclick =
+    async () => {
+      const name = title.value.trim();
+      const text = story.value.trim();
+
+      if (!name || !text) {
+        message.textContent =
+          "Enter a title and a story first.";
+        return;
+      }
+
+      try {
+        // Save the currently selected narration if available.
+        let narration = null;
+        if (audioUrl && audio) {
+          narration = await fetch(audioUrl).then(r => r.blob());
+        } else {
+          const saved = await storedAudio("readonly");
+          if (saved?.text === text) {
+            narration = saved.blob;
+          }
+        }
+
+        await operate("readwrite", store => store.put({
+          id: Date.now() + "-" +
+              Math.random().toString(36).slice(2),
+          title: name,
+          text,
+          photo: file.files[0] || null,
+          narration,
+          created: new Date().toISOString()
+        }));
+
+        title.value = "";
+        file.value = "";
+        message.textContent = "Photo memory saved!";
+        await refreshGallery();
+      } catch (err) {
+        message.textContent =
+          "Could not save memory. Check browser storage.";
+      }
+    };
+
+  refreshGallery().catch(() => {
+    message.textContent = "Gallery storage unavailable.";
+  });
+})();
