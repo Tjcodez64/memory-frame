@@ -51,3 +51,23 @@ button:focus-visible, textarea:focus-visible {
 .frame > p:first-child { font-size: 50px; margin: 0; }
 .secondary { background: #e1e5dc; color: #253d35; }
 small { display: block; color: #647268; }
+
+.voice-panel {
+  margin-top: 24px;
+  padding: 20px;
+  background: #fffdf7;
+  border: 1px solid #d4dace;
+  border-radius: 14px;
+}
+.voice-panel h2 { margin-top: 0; font-size: 22px; }
+select {
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #a9b6aa;
+  border-radius: 9px;
+  background: white;
+  color: #253d35;
+  font: inherit;
+}
+.voice-panel p { font-size: 14px; }
+audio { width: 100%; margin-top: 15px; }
