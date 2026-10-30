@@ -1,3 +1,39 @@
+
+// Save one narration in this browser.
+let restoringAudio = true;
+let audioSaveFailed = false;
+
+function storedAudio(mode, value) {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("memory-frame-audio", 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore("memory");
+    };
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error("Storage blocked"));
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction("memory", mode);
+      const store = tx.objectStore("memory");
+      const operation = mode === "readonly"
+        ? store.get("current")
+        : store.put(value, "current");
+      tx.oncomplete = () => {
+        db.close();
+        resolve(operation.result);
+      };
+      tx.onabort = () => {
+        db.close();
+        reject(tx.error || new Error("Storage failed"));
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(tx.error || new Error("Storage failed"));
+      };
+    };
+  });
+}
+
 const story = document.getElementById("story");
 const save = document.getElementById("save");
 const play = document.getElementById("play");
@@ -20,7 +56,7 @@ stop.after(download);
 document.querySelector("small").textContent =
   "Generate sends your text to ElevenLabs and uses account credits. " +
   "Replay uses the same audio without generating again. " +
-  "Download the MP3 to keep it: this page does not retain audio after refreshing.";
+  "Narration saves in this browser. Download a backup: clearing browser data removes saved audio.";
 
 try {
   story.value = localStorage.getItem("memory-frame-story") || "";
@@ -32,6 +68,7 @@ story.addEventListener("input", () => {
 });
 
 save.addEventListener("click", async () => {
+  if (restoringAudio) return;
   const text = story.value.trim();
   if (!text) {
     status.textContent = "Write your memory first.";
@@ -57,6 +94,13 @@ save.addEventListener("click", async () => {
     }
 
     const blob = await response.blob();
+    audioSaveFailed = false;
+    try {
+      await storedAudio("readwrite", { blob, text });
+    } catch {
+      audioSaveFailed = true;
+    }
+
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     audioUrl = URL.createObjectURL(blob);
     audio = new Audio(audioUrl);
@@ -76,7 +120,9 @@ save.addEventListener("click", async () => {
     } catch {}
 
     status.textContent =
-      "Narration ready! Touch to hear, then download your MP3.";
+      audioSaveFailed
+        ? "Audio is ready but could not be saved. Download it before leaving."
+        : "Narration saved in this browser! Refresh and it will still be here.";
   } catch (error) {
     status.textContent = error.message;
   } finally {
@@ -500,3 +546,41 @@ micButton.onclick = async () => {
       : "Could not start recording. Check microphone access and try again.";
   }
 };
+
+// Restore saved audio without calling ElevenLabs.
+save.disabled = true;
+story.disabled = true;
+micButton.disabled = true;
+status.textContent = "Loading saved narration…";
+
+(async () => {
+  try {
+    const saved = await storedAudio("readonly");
+    if (saved && saved.blob instanceof Blob && saved.blob.size) {
+      story.value = saved.text;
+      story.dispatchEvent(new Event("input", { bubbles: true }));
+      audioUrl = URL.createObjectURL(saved.blob);
+      audio = new Audio(audioUrl);
+      audio.onended = () => {
+        status.textContent = "Touch again to hear your memory.";
+      };
+      audio.onerror = () => {
+        status.textContent = "Playback failed. Try downloading the MP3.";
+      };
+      download.href = audioUrl;
+      download.style.display = "block";
+      status.textContent = "Saved narration restored! Touch to hear it.";
+    } else {
+      status.textContent = "Generate narration to save it in this browser.";
+    }
+  } catch {
+    status.textContent = "Browser storage is unavailable. Download your narration to keep it.";
+  } finally {
+    restoringAudio = false;
+    save.disabled = false;
+    story.disabled = false;
+    play.disabled = !audio;
+    micButton.disabled =
+      !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder;
+  }
+})();
