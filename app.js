@@ -584,3 +584,193 @@ status.textContent = "Loading saved narration…";
       !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder;
   }
 })();
+
+// Remove the saved story and generated narration.
+const clearMemory = document.createElement("button");
+clearMemory.id = "clear-memory";
+clearMemory.type = "button";
+clearMemory.className = "secondary";
+clearMemory.textContent = "Clear memory";
+download.after(clearMemory);
+
+clearMemory.onclick = async () => {
+  if (save.disabled || busyRecording) {
+    status.textContent = "Wait for the current task to finish first.";
+    return;
+  }
+
+  if (!confirm("Delete this browser's saved story and narration? Downloaded MP3 files will remain.")) {
+    return;
+  }
+
+  clearMemory.disabled = true;
+  save.disabled = true;
+  micButton.disabled = true;
+
+  try {
+    // Replace the stored record with an empty value.
+    await storedAudio("readwrite", null);
+
+    let textCleared = true;
+    try {
+      localStorage.removeItem("memory-frame-story");
+    } catch {
+      textCleared = false;
+    }
+
+    if (audio) audio.pause();
+    audio = null;
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    audioUrl = null;
+
+    sample.pause();
+    recordingPlayer.pause();
+    recordingPlayer.removeAttribute("src");
+    recordingPlayer.load();
+    recordingPlayer.hidden = true;
+    if (recordingUrl) URL.revokeObjectURL(recordingUrl);
+    recordingUrl = null;
+
+    download.removeAttribute("href");
+    download.style.display = "none";
+    play.disabled = true;
+    story.value = "";
+    story.dispatchEvent(new Event("input", { bubbles: true }));
+    micButton.textContent = "🎙 Record your memory";
+    micHelp.textContent = "Record up to 2 minutes. Whisper transcribes after you stop.";
+
+    status.textContent = textCleared
+      ? "Memory cleared. Ready for a new story."
+      : "Audio cleared, but old story text could not be removed from browser storage.";
+  } catch {
+    status.textContent = "Could not clear the saved memory. Please try again.";
+  } finally {
+    clearMemory.disabled = false;
+    save.disabled = false;
+    micButton.disabled =
+      !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder;
+  }
+};
+
+// OWN VOICE NARRATION
+// Records the user's actual voice, without ElevenLabs credits.
+(() => {
+  const section = document.createElement("section");
+  section.className = "voice-panel";
+  section.innerHTML = `
+    <h2>🎙 Use Your Own Voice</h2>
+    <p>Read your memory aloud and save your own narration.</p>
+    <button type="button" id="own-record">Record my narration</button>
+    <button type="button" id="own-play" disabled>Play my narration</button>
+    <audio id="own-audio" controls hidden></audio>
+    <a id="own-download" hidden>Download my narration</a>
+    <p id="own-status" role="status">Ready to record.</p>
+  `;
+
+  document.querySelector("#save").before(section);
+
+  const recordButton = section.querySelector("#own-record");
+  const playButton = section.querySelector("#own-play");
+  const player = section.querySelector("#own-audio");
+  const downloadLink = section.querySelector("#own-download");
+  const message = section.querySelector("#own-status");
+
+  let recorder;
+  let stream;
+  let chunks = [];
+  let audioURL = null;
+
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    recordButton.disabled = true;
+    message.textContent = "Microphone recording requires HTTPS and a supported browser.";
+    return;
+  }
+
+  recordButton.onclick = async () => {
+    if (recorder?.state === "recording") {
+      recordButton.disabled = true;
+      recorder.stop();
+      return;
+    }
+
+    recordButton.disabled = true;
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      const type = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4"
+      ].find(t => MediaRecorder.isTypeSupported(t));
+
+      recorder = type
+        ? new MediaRecorder(stream, { mimeType: type })
+        : new MediaRecorder(stream);
+
+      chunks = [];
+
+      recorder.ondataavailable = event => {
+        if (event.data.size) chunks.push(event.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+
+        const blob = new Blob(chunks, {
+          type: recorder.mimeType || "audio/webm"
+        });
+
+        if (audioURL) URL.revokeObjectURL(audioURL);
+        audioURL = URL.createObjectURL(blob);
+
+        player.src = audioURL;
+        player.hidden = false;
+        playButton.disabled = false;
+
+        downloadLink.href = audioURL;
+        downloadLink.download =
+          blob.type.includes("mp4") ? "my-memory.m4a" : "my-memory.webm";
+        downloadLink.hidden = false;
+
+        try {
+          await storedAudio("readwrite", {
+            blob,
+            text: document.querySelector("#story").value
+          });
+          message.textContent = "Your narration is saved in this browser!";
+        } catch {
+          message.textContent =
+            "Recording ready. Download it to keep a copy.";
+        }
+
+        recordButton.textContent = "Record again";
+        recordButton.disabled = false;
+      };
+
+      recorder.onerror = () => {
+        stream.getTracks().forEach(track => track.stop());
+        recordButton.disabled = false;
+        recordButton.textContent = "Record again";
+        message.textContent = "Recording failed. Please try again.";
+      };
+
+      recorder.start();
+      recordButton.textContent = "■ Stop my narration";
+      recordButton.disabled = false;
+      message.textContent = "Recording your voice…";
+
+    } catch (error) {
+      recordButton.disabled = false;
+      message.textContent =
+        "Could not access microphone. Check browser permissions.";
+    }
+  };
+
+  playButton.onclick = () => {
+    player.currentTime = 0;
+    player.play().catch(() => {
+      message.textContent = "Playback failed.";
+    });
+  };
+})();
